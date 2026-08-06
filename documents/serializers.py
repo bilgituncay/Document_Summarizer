@@ -53,7 +53,7 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
 class DocumentUploadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
-        fields = ["id", "original_filename", "status", "uploaded_at"]
+        fields = ["id", "file", "original_filename", "status", "uploaded_at"]
         read_only_fields = ["id", "original_filename", "status", "uploaded_at"]
 
     def validate_file(self,value):
