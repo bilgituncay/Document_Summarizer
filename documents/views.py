@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .tasks import extract_and_chunk_document
 from .models import Document, Question
 from .serializers import (
     DocumentDetailSerializer,
@@ -18,11 +19,6 @@ from .serializers import (
 class DocumentUploadView(APIView):
     """
     POST a PDF file under the 'file' field.
-
-    Currently synchronous end-to-end (no Celery yet): saves the Document
-    row and returns it immediately with status=pending. Text extraction,
-    chunking and summarization will move into Celery tasks in a later step -
-    this view will then just enqueue and return 202.
     """
 
     permission_classes = [IsAuthenticated]
@@ -34,9 +30,10 @@ class DocumentUploadView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         document = serializer.save()
+        extract_and_chunk_document.delay(document.id)
         return Response(
             DocumentUploadSerializer(document).data,
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_202_ACCEPTED,
         )
 
 class DocumentListView(ListAPIView):
