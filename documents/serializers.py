@@ -20,11 +20,12 @@ class QuestionSerializer(serializers.ModelSerializer):
             "id",
             "question_text",
             "answer_text",
+            "error_message",
             "model_used",
             "created_at",
             "answered_at",
         ]
-        read_only_fields = ["answer_text", "model_used", "created_at", "answered_at"]
+        read_only_fields = ["answer_text", "error_message", "model_used", "created_at", "answered_at"]
 
 class DocumentListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for list views."""

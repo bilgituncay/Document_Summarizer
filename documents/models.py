@@ -87,6 +87,7 @@ class Question(models.Model):
     )
     question_text = models.TextField()
     answer_text = models.TextField(blank=True, default="")
+    error_message = models.TextField(blank=True, default="")
     model_used = models.CharField(max_length=100, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)

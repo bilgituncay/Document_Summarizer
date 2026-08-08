@@ -1,11 +1,11 @@
 from rest_framework import status
-from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveAPIView
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .tasks import extract_and_chunk_document
+from .tasks import extract_and_chunk_document, answer_question
 from .models import Document, Question
 from .serializers import (
     DocumentDetailSerializer,
@@ -89,6 +89,56 @@ class QuestionCreateView(APIView):
             asked_by=request.user,
             question_text=serializer.validated_data["question_text"],
         )
+        answer_question.delay(question.id)
         return Response(
-            QuestionSerializer(question).data, status=status.HTTP_201_CREATED
+            QuestionSerializer(question).data, status=status.HTTP_202_ACCEPTED
         )
+    
+class QuestionListCreateView(ListCreateAPIView):
+    """
+    GET: retrieve questions asked against a specific document.
+    POST: {"question_text": "..."} - only allowed after chunking is done.
+    """
+
+    serializer_class = QuestionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Question.objects.filter(
+            document_id=self.kwargs["document_id"],
+            document__owner=self.request.user,
+        )
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            document = Document.objects.get(id=self.kwargs["document_id"], owner=request.user)
+        except Document.DoesNotExist:
+            return Response(
+                {"detail": "Document not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if document.status != Document.Status.DONE:
+            return Response(
+                {"detail": "Document is not ready for questions yet."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        question = Question.objects.create(
+            document=document,
+            asked_by=request.user,
+            question_text=serializer.validated_data["question_text"],
+        )
+        answer_question.delay(question.id)
+        return Response(
+            QuestionSerializer(question).data, status=status.HTTP_202_ACCEPTED
+        )
+    
+class QuestionDetailView(RetrieveAPIView):
+
+    serializer_class = QuestionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Question.objects.filter(document__owner=self.request.user)
