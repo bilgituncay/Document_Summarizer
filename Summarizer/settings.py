@@ -81,8 +81,12 @@ WSGI_APPLICATION = 'Summarizer.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_DB', 'summarizer'),
+        'USER': os.environ.get('POSTGRES_USER', 'summarizer'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'summarizer'),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
 
