@@ -25,12 +25,19 @@ class DocumentUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post (self, request):
+        api_key = request.META.get("HTTP_X_ANTHROPIC_API_KEY")
+        if not api_key:
+            return Response(
+                {"detail": "X-Anthropic-Api-Key header is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
         serializer = DocumentUploadSerializer(
             data=request.data, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
         document = serializer.save()
-        extract_and_chunk_document.delay(document.id)
+        extract_and_chunk_document.delay(document.id, api_key)
         return Response(
             DocumentUploadSerializer(document).data,
             status=status.HTTP_202_ACCEPTED,
@@ -110,6 +117,12 @@ class QuestionListCreateView(ListCreateAPIView):
         )
     
     def create(self, request, *args, **kwargs):
+        api_key = request.META.get("HTTP_X_ANTHROPIC_API_KEY")
+        if not api_key:
+            return Response(
+                {"detail": "X-Anthropic-Api-Key header is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         try:
             document = Document.objects.get(id=self.kwargs["document_id"], owner=request.user)
         except Document.DoesNotExist:
@@ -130,7 +143,7 @@ class QuestionListCreateView(ListCreateAPIView):
             asked_by=request.user,
             question_text=serializer.validated_data["question_text"],
         )
-        answer_question.delay(question.id)
+        answer_question.delay(question.id, api_key)
         return Response(
             QuestionSerializer(question).data, status=status.HTTP_202_ACCEPTED
         )

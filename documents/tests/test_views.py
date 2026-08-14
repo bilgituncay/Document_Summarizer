@@ -1,5 +1,6 @@
 import io
 
+from unittest.mock import MagicMock, patch
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
@@ -54,18 +55,44 @@ class DocumentAPITestCase(APITestCase):
 class DocumentUploadViewTests(DocumentAPITestCase):
     def test_upload_requires_authentication(self):
         self.client.credentials()
-        response = self.client.post("/api/documents/upload/", {"file": self._pdf_upload_file()})
+        response = self.client.post(
+            "/api/documents/upload/",
+            {"file": self._pdf_upload_file()},
+            HTTP_X_ANTHROPIC_API_KEY="fake-api-key",
+            )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_successful_upload_returns_202(self):
-        response = self.client.post("/api/documents/upload/", {"file": self._pdf_upload_file()})
+    @patch("documents.tasks.anthropic.Anthropic")
+    def test_successful_upload_returns_202(self, mock_anthropic_class):
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="A mocked summary.")]
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+        
+        response = self.client.post(
+            "/api/documents/upload/",
+            {"file": self._pdf_upload_file()},
+            HTTP_X_ANTHROPIC_API_KEY="fake-api-key",
+            )
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         self.assertEqual(Document.objects.count(), 1)
         self.assertEqual(Document.objects.first().owner, self.user)
 
     def test_rejects_non_pdf_file(self):
         file_obj = SimpleUploadedFile("test.txt", b"some text", content_type="text/plain")
-        response = self.client.post("/api/documents/upload/", {"file": file_obj})
+        response = self.client.post(
+            "/api/documents/upload/",
+            {"file": file_obj},
+            HTTP_X_ANTHROPIC_API_KEY="fake-api-key",
+            )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Document.objects.count(), 0)
+
+    def test_upload_requires_api_key(self):
+        response = self.client.post(
+            "/api/documents/upload/", {"file": self._pdf_upload_file()}
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Document.objects.count(), 0)
 
@@ -128,20 +155,29 @@ class QuestionListCreateViewTests(DocumentAPITestCase):
         response = self.client.post(
             f"/api/documents/{self.pending_document.id}/questions/",
             {"question_text": "What is this?"},
+            HTTP_X_ANTHROPIC_API_KEY="fake-api-key",
         )
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(Question.objects.count(), 0)
 
-    def test_can_ask_question_on_done_document(self):
+    @patch("documents.tasks.anthropic.Anthropic")
+    def test_can_ask_question_on_done_document(self, mock_anthropic_class):
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="A mocked answer.")]
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
         response = self.client.post(
             f"/api/documents/{self.done_document.id}/questions/",
             {"question_text": "What is this about?"},
+            HTTP_X_ANTHROPIC_API_KEY="fake-api-key",
         )
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         self.assertEqual(Question.objects.count(), 1)
         question = Question.objects.first()
         self.assertEqual(question.asked_by, self.user)
-        self.assertNotEqual(question.answer_text, "")
+        self.assertEqual(question.answer_text, "A mocked answer.")
         self.assertIsNotNone(question.answered_at)
 
     def test_lists_only_questions_for_that_document(self):
@@ -172,6 +208,7 @@ class QuestionListCreateViewTests(DocumentAPITestCase):
         response = self.client.post(
             f"/api/documents/{other_document.id}/questions/",
             {"question_text": "Sneaky question"},
+            HTTP_X_ANTHROPIC_API_KEY="fake-api-key",
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
