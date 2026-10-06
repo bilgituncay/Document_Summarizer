@@ -1,6 +1,6 @@
 # Document Summarizer
 
-An async document summarization and Q&A backend built with Django, Django REST Framework, and Celery. Upload a PDF, and a background task pipeline extracts its text, chunks it, and generates a summary via the Anthropic API — all off the request/response cycle. Ask follow-up questions against any processed document and get answers grounded in its content.
+An async document summarization and Q&A backend built with Django, Django REST Framework, and Celery. Upload a PDF, and a background task pipeline extracts its text, chunks it, and generates a summary via the Anthropic API, all off the request/response cycle. Ask follow-up questions against any processed document and get answers grounded in its content.
 
 Built as a portfolio project to demonstrate backend patterns beyond basic CRUD: async task pipelines, task chaining and retries, ownership-scoped REST APIs, and a fully containerized, multi-service local dev environment.
 
@@ -130,11 +130,11 @@ docker compose exec web python manage.py test
 
 **Bring-your-own-key, not a shared API key.** Rather than pay for a shared Anthropic API key to keep a public demo running indefinitely, this project requires each request to supply its own key via an `X-Anthropic-Api-Key` header. The key is used to construct a fresh `anthropic.Anthropic` client per task call and is never persisted to the database or logged.
 
-Known tradeoff: because Celery serializes task arguments (including the API key) into messages sent through Redis, the key briefly exists in the broker's memory as part of the queued task payload. This is an acceptable tradeoff for a demo/portfolio project but would need addressing in a production system — e.g. storing an encrypted key server-side and passing only a reference/ID through the task queue, or using a short-lived token exchange.
+Known tradeoff: because Celery serializes task arguments (including the API key) into messages sent through Redis, the key briefly exists in the broker's memory as part of the queued task payload. This is for the demo project but would need addressing in a production system, such as storing an encrypted key server-side and passing only a reference/ID through the task queue, or using a short-lived token exchange.
 
-**Full-document summarization, not chunk-by-chunk.** Chunks are reassembled into the full document text before being sent to the LLM in a single prompt. This keeps the pipeline simple but means very large documents could exceed the model's context window — a map-reduce style chunk-by-chunk summarization (summarize each chunk, then summarize the summaries) would be the next step to handle that case.
+**Full-document summarization, not chunk-by-chunk.** Chunks are reassembled into the full document text before being sent to the LLM in a single prompt. This keeps the pipeline simple but means very large documents could exceed the model's context window. A map-reduce style chunk-by-chunk summarization (summarizing each chunk, then summarizing the summaries) would be the next step to handle that case.
 
-**No real-time push (websockets/webhooks).** Clients poll for status. This was a deliberate scope decision — polling is simpler to build, test, and reason about, and is a reasonable choice for a project at this scale. A production version handling many concurrent users might add websocket-based push notifications instead.
+**No real-time push (websockets/webhooks).** Clients poll for status. This was a deliberate scope decision: polling is simpler to build, test, and reason about, and is a reasonable choice for a project at this scale. A production version handling many concurrent users might add websocket-based push notifications instead.
 
 ## Possible future improvements
 
